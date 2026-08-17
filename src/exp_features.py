@@ -16,6 +16,7 @@ import sys
 import time
 from pathlib import Path
 
+import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
@@ -55,6 +56,10 @@ VARIANTS = {
     "fpte_type": {"keys": ["fp", "fp_type"], "count": True},
     "fpte_reason": {"keys": ["fp", "fp_reason"], "count": True},
     "fpte_hist": {"keys": ["fp"], "count": True, "hist_subset": True},
+    # `ip_country_id` is dropped by the main pipeline; these two variants measure whether it
+    # can be used at all, given that train is 99.4% country 23 while 40% of test is 11.
+    "fpte_ip": {"keys": ["fp"], "count": True, "ip_cat": True},
+    "fpte_ipte": {"keys": ["fp", "ip"], "count": True},
 }
 HIST_SUBSET = ["fp_prior_claims", "fp_gap_prev_hours", "fp_owner_prior_claims",
                "content_prior_claims", "owner_prior_claims"]
@@ -71,6 +76,8 @@ def _fp_keys(raw: pd.DataFrame, extra: list[str], names: list[str]) -> dict[str,
             out[name] = fp + "||" + raw["claim_type"].astype(str)
         elif name == "fp_reason":
             out[name] = fp + "||" + raw["claim_reason_start"].astype(str)
+        elif name == "ip":
+            out[name] = raw["ip_country_id"].astype(str)
         else:
             raise ValueError(name)
     return out
@@ -85,6 +92,10 @@ def add_variant_features(frame_tr, frame_va, raw_tr, raw_va, hist, variant):
         frame_tr[cols] = hist.loc[raw_tr["claim_id"].to_numpy(), cols].to_numpy()
         frame_va[cols] = hist.loc[raw_va["claim_id"].to_numpy(), cols].to_numpy()
         extra_numeric += cols
+    if cfg.get("ip_cat"):
+        frame_tr["ip_country_id"] = raw_tr["ip_country_id"].to_numpy()
+        frame_va["ip_country_id"] = raw_va["ip_country_id"].to_numpy()
+        extra_numeric.append("ip_country_id")
     keys = cfg.get("keys", [])
     if keys:
         y_tr = raw_tr["is_valid"].to_numpy()
@@ -119,25 +130,61 @@ def build(raw_tr, raw_va, mappings, hist, variant):
     }
 
 
+# Model presets. Each LightGBM preset starts from `lgb_neutral` and overrides a few keys;
+# `half_life` switches on the exponential recency weights used by the `cat_recent` component.
+LGB_PRESETS = {
+    "lgb": {},
+    "lgb_hl105": {"half_life": 105.0},
+    "lgb_hl210": {"half_life": 210.0},
+    "lgb_leaves96": {"num_leaves": 96, "min_child_samples": 45},
+    "lgb_leaves24": {"num_leaves": 24},
+    "lgb_ff60": {"colsample_bytree": 0.60},
+    "lgb_lr015": {"learning_rate": 0.015},
+    "lgb_mcs80": {"min_child_samples": 80},
+}
+CAT_PRESETS = {
+    "cat": {},
+    "cat_hl105": {"half_life": 105.0},
+    "cat_depth9": {"depth": 9},
+}
+
+
+def fit_lgb_weighted(x_tr, y_tr, cats, params, seed, iterations, weight=None, eval_set=None):
+    """`sol.fit_lightgbm` with optional sample weights (used by the recency presets)."""
+    model = lgb.LGBMClassifier(n_estimators=iterations, max_depth=-1, objective="binary",
+                               random_state=int(seed), verbosity=-1, n_jobs=sol.THREADS, **params)
+    if eval_set is None:
+        model.fit(x_tr, y_tr, categorical_feature=cats, sample_weight=weight)
+        return model, iterations
+    model.fit(x_tr, y_tr, categorical_feature=cats, sample_weight=weight, eval_set=eval_set,
+              callbacks=[lgb.early_stopping(sol.ES_ROUNDS, verbose=False)])
+    return model, max(int(model.best_iteration_ or iterations), 20)
+
+
 def score_fold(raw_tr, raw_va, mappings, hist, variant, model, seeds):
     """Train on the prefix, score the validation block; iterations from an inner holdout."""
     inner_cut = max(len(raw_tr) - BLOCK, int(0.6 * len(raw_tr)))
     inner = build(raw_tr.iloc[:inner_cut], raw_tr.iloc[inner_cut:], mappings, hist, variant)
     outer = build(raw_tr, raw_va, mappings, hist, variant)
+    inner_times = pd.to_datetime(raw_tr.iloc[:inner_cut]["first_event_time"])
+    outer_times = pd.to_datetime(raw_tr["first_event_time"])
     probs = {}
-    if model == "lgb":
-        params = sol.LGB_PARAMS["lgb_neutral"]
-        _, iterations = sol.fit_lightgbm(
+    if model in LGB_PRESETS:
+        overrides = dict(LGB_PRESETS[model])
+        half_life = overrides.pop("half_life", None)
+        params = {**sol.LGB_PARAMS["lgb_neutral"], **overrides}
+        w_inner = None if half_life is None else sol.recency_weight(inner_times, half_life)
+        w_outer = None if half_life is None else sol.recency_weight(outer_times, half_life)
+        _, iterations = fit_lgb_weighted(
             inner["x_lgb_tr"], inner["y_tr"], inner["lgb_cats"], params, seeds[0],
-            sol.MAX_ITERATIONS_LGB, eval_set=[(inner["x_lgb_va"], inner["y_va"])])
+            sol.MAX_ITERATIONS_LGB, weight=w_inner,
+            eval_set=[(inner["x_lgb_va"], inner["y_va"])])
         for seed in seeds:
-            fitted, _ = sol.fit_lightgbm(outer["x_lgb_tr"], outer["y_tr"], outer["lgb_cats"],
-                                         params, seed, iterations)
+            fitted, _ = fit_lgb_weighted(outer["x_lgb_tr"], outer["y_tr"], outer["lgb_cats"],
+                                         params, seed, iterations, weight=w_outer)
             probs[seed] = fitted.predict_proba(outer["x_lgb_va"])[:, 1]
-    else:
-        cfg = sol.CAT_PARAMS["cat_all"]
-        inner_times = pd.to_datetime(raw_tr.iloc[:inner_cut]["first_event_time"])
-        outer_times = pd.to_datetime(raw_tr["first_event_time"])
+    elif model in CAT_PRESETS:
+        cfg = {**sol.CAT_PARAMS["cat_all"], **CAT_PRESETS[model]}
         w_inner = None if cfg["half_life"] is None else sol.recency_weight(inner_times, cfg["half_life"])
         w_outer = None if cfg["half_life"] is None else sol.recency_weight(outer_times, cfg["half_life"])
         _, iterations = sol.fit_catboost(
