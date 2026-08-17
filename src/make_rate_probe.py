@@ -26,7 +26,7 @@ COMPONENTS = ["cat_all", "cat_recent", "lgb_neutral", "lgb_diverse"]
 SAMPLE_F1 = 0.2347083926
 TEST_ROWS = 7446
 TEST_POSITIVES = int(round(TEST_ROWS * SAMPLE_F1 / (2 - SAMPLE_F1)))
-MULTIPLIERS = {"m140": 1.4, "m160": 1.6, "m180": 1.8, "m200": 2.0}
+MULTIPLIERS = {"m140": 1.4, "m160": 1.6, "m170": 1.7, "m180": 1.8, "m190": 1.9, "m200": 2.0}
 
 
 def main() -> None:
