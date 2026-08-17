@@ -8,7 +8,7 @@
 |---|---|
 | Точка отсчёта организаторов (все единицы) | F1 = `0.2347083926` |
 | Предыдущий подтверждённый public F1 (frozen champion) | **`0.4792176039`** |
-| Итоговый файл для платформы | `submission.csv` (= `submissions/submission_equal4_m180.csv`) |
+| Итоговый файл для платформы | `submission.csv` (= `submissions/submission_equal4_m180_fp.csv`) |
 | Код обучения и инференса | `solution.py`, `solution.ipynb` |
 | Схема валидации | 4 хронологических блока по 7 446 строк (размер hidden test) |
 
@@ -55,10 +55,32 @@ CV. Правило безубыточности — расширять `k`, по
 сохраняется. Это единственный компонент решения, который **нельзя** проверить офлайн до
 конца: обе стороны неравенства зависят от того, насколько тест «легче» валидации.
 
-Второе, меньшее улучшение: **усреднение по 3 seed'ам и добавление neutral CatBoost в
-бленд с равными весами** поднимает PR AUC с `0.4096` до `0.4121` и F1 на плато на `+0.003`
-(`artifacts/analysis_ranking.csv`). Веса намеренно равные: любой подбор весов на фолдах
-раньше не переносился между фолдами (семейство гипотез 4 в каталоге).
+Второе улучшение — **reporter fingerprint**. Это ключ из 10 стабильных атрибутов профиля:
+`registered_year`, `age_bucket`, `sex`, `has_avatar`, `has_school`, `has_university`,
+`is_private_profile`, `registered_phone_country_id`, `mobile_phone_country_id` и
+`profile_country_id`, соединённых в одну строку. Для ключа считается OOF target encoding
+внутри обучающего префикса с `alpha = 15` и частота ключа в префиксе; на validation/test
+признаки маппятся только по префиксу, поэтому утечки метки нет. Эти признаки добавлены
+только в LightGBM: для CatBoost `reporter_fp_te` и `reporter_fp_history_count` намеренно
+исключены из `base_columns`, поскольку id-based `_te`/`_history_count` признаки не входят
+в его `cat_features`. В отдельной абляции fingerprint ухудшил CatBoost (средний PR AUC
+`0.4016 -> 0.3971`, особенно на fold 1: `0.4506 -> 0.4250`), поэтому асимметрия
+является намеренным решением.
+
+На полном 4-компонентном ансамбле с 3 seed'ами и 4 хронологическими фолдами reporter
+fingerprint улучшил F1 на каждой проверенной операционной точке:
+
+| вариант | m=1.6 | m=1.7 | **m=1.8** | m=1.9 | m=2.0 |
+|---|---:|---:|---:|---:|---:|
+| baseline | 0.4183 | 0.4190 | 0.4223 | 0.4230 | 0.4212 |
+| с reporter fingerprint TE | 0.4190 | 0.4232 | **0.4252** | 0.4252 | 0.4231 |
+
+В shipped operating point `m = 1.8` прирост составляет `0.4223 -> 0.4252` (`+0.0029`).
+Per-fold ROC AUC вырос с `0.7940` до `0.7952`, PR AUC — с `0.4121` до `0.4145`;
+folds 4/3/2 улучшились по обеим метрикам, а fold 1 немного регрессировал по PR AUC
+(`0.4612 -> 0.4554`). `src/rate_curve.py` на новых вероятностях по-прежнему выбирает
+`m = 1.8`, то есть decision rule не изменился: `RATE_MULTIPLIER = 1.8`,
+`k = 1782` из `7446`.
 
 ## 2. Данные и признаки
 
@@ -77,6 +99,8 @@ CV. Правило безубыточности — расширять `k`, по
   для сущностных ключей `id_content_owner`, `id_content`, `owner × claim_type`,
   `owner × claim_reason_start` (K-fold OOF на train, применение к валидации/тесту по
   маппингу, посчитанному только на train-префиксе);
+* reporter fingerprint TE и prefix count (только для LightGBM; CatBoost их не использует,
+  см. раздел 1);
 * флаги «сущность встречалась в прошлом» и время от начала выборки.
 
 ## 3. Модели
@@ -136,9 +160,10 @@ CV. Правило безубыточности — расширять `k`, по
 | **top-k, `k = 1.8 × 990`** | множитель с CV, число позитивов известно | **0.4224** |
 | оракульный порог (недостижимая верхняя граница) | подсмотр в метки фолда | 0.4290 |
 
-Тот же top-k-переход на бленде из 4 компонент с усреднением по seed'ам даёт `0.4249`,
-то есть суммарно `+0.0066` к правилу champion, при том что оракульная граница выше
-champion-правила всего на `+0.0107`.
+На baseline-бленде из 4 компонент с усреднением по seed'ам top-k-правило даёт `0.4223`
+при `m = 1.8`. После добавления reporter fingerprint TE результат равен `0.4252`,
+то есть прирост составляет `+0.0029`; feature лучше baseline на всех точках
+`m = 1.6…2.0`.
 
 Онлайн-результаты (public F1): frozen champion `0.4792176039` при `k = 1426`.
 Кандидаты этого решения перечислены в `submissions/` — см. раздел 7.
@@ -167,13 +192,15 @@ python src/cv_probs.py --final --seeds 42,2026,777     # вероятности 
 python src/analyze_rules.py                            # сравнение решающих правил
 python src/rate_curve.py                               # F1 как функция доли единиц
 python src/make_submissions.py                         # кандидаты в submissions/
+python src/exp_features.py --variant base --model lgb --seeds 42,2026,777 --folds 4
+python src/compare_cv.py artifacts/baseline artifacts
 ```
 
 ## 7. Кандидаты и порядок загрузки (5 попыток)
 
 | # | файл | бленд | k | обоснование |
 |---|---|---|---|---|
-| 1 | `submissions/submission_equal4_m180.csv` | равные веса, 4 компоненты | 1 782 | лучший вариант по CV |
+| 1 | `submissions/submission_equal4_m180_fp.csv` | равные веса, 4 компоненты + reporter fingerprint TE | 1 782 | новый лучший вариант по CV |
 | 2 | `submissions/submission_equal4_m160.csv` | равные веса, 4 компоненты | 1 584 | нижняя граница плато — страховка, если тест «легче» CV |
 | 3 | `submissions/submission_champblend_m180.csv` | `0.70/0.20/0.10` | 1 782 | отделяет вклад бленда от вклада операционной точки |
 | 4 | `submissions/submission_equal4_m200.csv` | равные веса, 4 компоненты | 1 980 | верхняя граница плато |
@@ -182,6 +209,10 @@ python src/make_submissions.py                         # кандидаты в s
 `submissions/submission_champblend_m144.csv` — воспроизведение champion этим пайплайном:
 совпадение с загруженным champion-файлом по 98.5 % строк (Jaccard по позитивам 0.926),
 что подтверждает эквивалентность кода.
+
+`submissions/submission_equal4_m180.csv` остаётся ранее загруженным вариантом с public
+F1 `0.489`; новый кандидат — `submission.csv` и его копия
+`submissions/submission_equal4_m180_fp.csv`.
 
 ## 8. Структура репозитория
 
@@ -194,11 +225,16 @@ src/analyze_rules.py         сравнение решающих правил б
 src/rate_curve.py            F1 как функция доли предсказанных единиц
 src/make_submissions.py      сборка кандидатов из кэша вероятностей
 src/verify_reproducibility.py сверка нового пайплайна с кэшем вероятностей
+src/exp_features.py          абляции признаков и моделей
+src/features_v2.py           reporter fingerprint и history features
+src/eval_utils.py            общие метрики экспериментов
+src/compare_cv.py             сравнение baseline и нового CV
 artifacts/                   вероятности по фолдам, логи, таблицы анализа
 submissions/                 кандидаты на загрузку
 models/                      сохранённые финальные модели
 legacy/                      исследовательские скрипты предыдущих этапов
 docs/HYPOTHESES_ROUND2.md    гипотезы этого раунда (R1–R10) и их вердикты
+docs/HYPOTHESES_ROUND3.md    reporter fingerprint и абляции раунда 3
 docs/                        каталог экспериментов и отклонённых гипотез прошлых раундов
 DATA_DESCRIPTION.md          описание колонок
 ```

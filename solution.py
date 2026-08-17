@@ -24,6 +24,23 @@ N_SPLITS = 5
 TE_ALPHA = 10
 RAW_TE_ALPHA = 15.0
 
+# Stable profile attributes that approximate the identity of the reporting account: the
+# data has no reporter id, but this 10-way tuple has only ~5.6k distinct values on train
+# and 96% of rows share it with at least one other row, so a past-only target encoding of
+# the tuple carries reporter-level information that the single columns do not.
+REPORTER_FP_COLS = [
+    "registered_year",
+    "age_bucket",
+    "sex",
+    "has_avatar",
+    "has_school",
+    "has_university",
+    "is_private_profile",
+    "registered_phone_country_id",
+    "mobile_phone_country_id",
+    "profile_country_id",
+]
+
 TE_COLUMNS = [
     "claim_type",
     "claim_reason_start",
@@ -285,6 +302,7 @@ def add_raw_keys(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     out["owner_claim_type_key"] = out["id_content_owner"].astype(str) + "__" + out["claim_type"].astype(str)
     out["owner_reason_key"] = out["id_content_owner"].astype(str) + "__" + out["claim_reason_start"].astype(str)
+    out["reporter_fp"] = out[REPORTER_FP_COLS].astype(str).agg("|".join, axis=1)
     return out
 
 
@@ -322,7 +340,7 @@ def make_split_features(raw_train: pd.DataFrame, raw_val: pd.DataFrame, agg_maps
     base_train = kfold_target_encoding(base_train, "is_valid", TE_ALPHA)
     base_val = apply_te_to_new_data(engineer_features(raw_train, agg_maps), base_val, "is_valid", TE_ALPHA)
 
-    te_cols = ["id_content_owner", "id_content", "owner_claim_type_key", "owner_reason_key"]
+    te_cols = ["id_content_owner", "id_content", "owner_claim_type_key", "owner_reason_key", "reporter_fp"]
     raw_te_train, raw_te_val = oof_target_encode(train_with_keys, val_with_keys, te_cols)
     for col in te_cols:
         for suffix in ["_te", "_history_count"]:
@@ -372,7 +390,7 @@ def encode_lgb(train: pd.DataFrame, val: pd.DataFrame, feature_cols: list[str], 
 
 def base_columns(frame: pd.DataFrame) -> tuple[list[str], list[str], list[str]]:
     no_id = [c for c in frame.columns if c not in ["is_valid", "owner_id_cat", "content_id_cat"]]
-    id_bases = {"id_content_owner", "id_content", "owner_claim_type_key", "owner_reason_key"}
+    id_bases = {"id_content_owner", "id_content", "owner_claim_type_key", "owner_reason_key", "reporter_fp"}
     cat_features = [
         c for c in no_id
         if not (

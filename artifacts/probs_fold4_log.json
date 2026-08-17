@@ -12,13 +12,13 @@
     777
   ],
   "cat_all_iterations": 102,
-  "cat_all_seconds": 10.4,
+  "cat_all_seconds": 9.5,
   "cat_recent_iterations": 134,
-  "cat_recent_seconds": 11.3,
-  "lgb_neutral_iterations": 147,
-  "lgb_neutral_seconds": 2.9,
-  "lgb_diverse_iterations": 163,
-  "lgb_diverse_seconds": 3.5,
+  "cat_recent_seconds": 11.5,
+  "lgb_neutral_iterations": 137,
+  "lgb_neutral_seconds": 2.8,
+  "lgb_diverse_iterations": 212,
+  "lgb_diverse_seconds": 4.6,
   "lgb_strong_iterations": 20,
   "lgb_strong_seconds": 0.9
 }

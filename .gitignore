@@ -1,2 +1,4 @@
 __pycache__/
 *.pyc
+artifacts/exp_*.npy
+artifacts/history_features.parquet
