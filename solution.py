@@ -40,6 +40,9 @@ REPORTER_FP_COLS = [
     "mobile_phone_country_id",
     "profile_country_id",
 ]
+# Accepted on temporal CV (+0.003 F1), but rejected on the leaderboard (-0.0034 at equal k);
+# see docs/LEADERBOARD_PROBE.md.
+USE_REPORTER_FP = False
 
 TE_COLUMNS = [
     "claim_type",
@@ -302,7 +305,8 @@ def add_raw_keys(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     out["owner_claim_type_key"] = out["id_content_owner"].astype(str) + "__" + out["claim_type"].astype(str)
     out["owner_reason_key"] = out["id_content_owner"].astype(str) + "__" + out["claim_reason_start"].astype(str)
-    out["reporter_fp"] = out[REPORTER_FP_COLS].astype(str).agg("|".join, axis=1)
+    if USE_REPORTER_FP:
+        out["reporter_fp"] = out[REPORTER_FP_COLS].astype(str).agg("|".join, axis=1)
     return out
 
 
@@ -340,7 +344,9 @@ def make_split_features(raw_train: pd.DataFrame, raw_val: pd.DataFrame, agg_maps
     base_train = kfold_target_encoding(base_train, "is_valid", TE_ALPHA)
     base_val = apply_te_to_new_data(engineer_features(raw_train, agg_maps), base_val, "is_valid", TE_ALPHA)
 
-    te_cols = ["id_content_owner", "id_content", "owner_claim_type_key", "owner_reason_key", "reporter_fp"]
+    te_cols = ["id_content_owner", "id_content", "owner_claim_type_key", "owner_reason_key"]
+    if USE_REPORTER_FP:
+        te_cols.append("reporter_fp")
     raw_te_train, raw_te_val = oof_target_encode(train_with_keys, val_with_keys, te_cols)
     for col in te_cols:
         for suffix in ["_te", "_history_count"]:
@@ -390,7 +396,9 @@ def encode_lgb(train: pd.DataFrame, val: pd.DataFrame, feature_cols: list[str], 
 
 def base_columns(frame: pd.DataFrame) -> tuple[list[str], list[str], list[str]]:
     no_id = [c for c in frame.columns if c not in ["is_valid", "owner_id_cat", "content_id_cat"]]
-    id_bases = {"id_content_owner", "id_content", "owner_claim_type_key", "owner_reason_key", "reporter_fp"}
+    id_bases = {"id_content_owner", "id_content", "owner_claim_type_key", "owner_reason_key"}
+    if USE_REPORTER_FP:
+        id_bases.add("reporter_fp")
     cat_features = [
         c for c in no_id
         if not (

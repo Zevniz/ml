@@ -8,7 +8,7 @@
 |---|---|
 | Точка отсчёта организаторов (все единицы) | F1 = `0.2347083926` |
 | Предыдущий подтверждённый public F1 (frozen champion) | **`0.4792176039`** |
-| Итоговый файл для платформы | `submission.csv` (= `submissions/submission_equal4_m180_fp.csv`) |
+| Итоговый файл для платформы | `submission.csv` (= `submissions/submission_equal4_m180.csv`) |
 | Код обучения и инференса | `solution.py`, `solution.ipynb` |
 | Схема валидации | 4 хронологических блока по 7 446 строк (размер hidden test) |
 
@@ -55,7 +55,7 @@ CV. Правило безубыточности — расширять `k`, по
 сохраняется. Это единственный компонент решения, который **нельзя** проверить офлайн до
 конца: обе стороны неравенства зависят от того, насколько тест «легче» валидации.
 
-Второе улучшение — **reporter fingerprint**. Это ключ из 10 стабильных атрибутов профиля:
+Раунд 3 также проверил **reporter fingerprint**. Это ключ из 10 стабильных атрибутов профиля:
 `registered_year`, `age_bucket`, `sex`, `has_avatar`, `has_school`, `has_university`,
 `is_private_profile`, `registered_phone_country_id`, `mobile_phone_country_id` и
 `profile_country_id`, соединённых в одну строку. Для ключа считается OOF target encoding
@@ -75,7 +75,11 @@ fingerprint улучшил F1 на каждой проверенной опер�
 | baseline | 0.4183 | 0.4190 | 0.4223 | 0.4230 | 0.4212 |
 | с reporter fingerprint TE | 0.4190 | 0.4232 | **0.4252** | 0.4252 | 0.4231 |
 
-В shipped operating point `m = 1.8` прирост составляет `0.4223 -> 0.4252` (`+0.0029`).
+В shipped operating point `m = 1.8` прирост на CV составлял `0.4223 -> 0.4252`
+(`+0.0029`). Однако leaderboard-проба показала обратное: при том же `k = 1782`
+legacy ranking дал `TP=678`, F1 `0.4890`, а fingerprint ranking — `TP=673`,
+F1 `0.4856`. Поэтому fingerprint оставлен в коде как переключаемая исследовательская
+ветка, но отключён по умолчанию (`USE_REPORTER_FP = False`).
 Per-fold ROC AUC вырос с `0.7940` до `0.7952`, PR AUC — с `0.4121` до `0.4145`;
 folds 4/3/2 улучшились по обеим метрикам, а fold 1 немного регрессировал по PR AUC
 (`0.4612 -> 0.4554`). `src/rate_curve.py` на новых вероятностях по-прежнему выбирает
@@ -99,8 +103,8 @@ folds 4/3/2 улучшились по обеим метрикам, а fold 1 н�
   для сущностных ключей `id_content_owner`, `id_content`, `owner × claim_type`,
   `owner × claim_reason_start` (K-fold OOF на train, применение к валидации/тесту по
   маппингу, посчитанному только на train-префиксе);
-* reporter fingerprint TE и prefix count (только для LightGBM; CatBoost их не использует,
-  см. раздел 1);
+* опциональный reporter fingerprint TE и prefix count (только для LightGBM; по умолчанию
+  выключен через `USE_REPORTER_FP = False`, см. раздел 1);
 * флаги «сущность встречалась в прошлом» и время от начала выборки.
 
 ## 3. Модели
@@ -165,7 +169,12 @@ folds 4/3/2 улучшились по обеим метрикам, а fold 1 н�
 то есть прирост составляет `+0.0029`; feature лучше baseline на всех точках
 `m = 1.6…2.0`.
 
-Онлайн-результаты (public F1): frozen champion `0.4792176039` при `k = 1426`.
+Онлайн-результаты: frozen champion `0.4792176039` при `k = 1426`; legacy equal-weight
+blend `0.4890` при `k = 1782`. Leaderboard-проба непосредственно измерила operating
+point: в исследованном диапазоне `k = 1386…1980` F1 лежал между `0.478` и `0.489`,
+без error bars для отдельных измерений. Подробности и таблица TP — в
+`docs/LEADERBOARD_PROBE.md`. Для legacy ranking расширение после `k=1782` уже невыгодно,
+поэтому shipped rule остаётся `RATE_MULTIPLIER = 1.8`, `k=1782`.
 Кандидаты этого решения перечислены в `submissions/` — см. раздел 7.
 
 ## 6. Воспроизведение
@@ -192,6 +201,7 @@ python src/cv_probs.py --final --seeds 42,2026,777     # вероятности 
 python src/analyze_rules.py                            # сравнение решающих правил
 python src/rate_curve.py                               # F1 как функция доли единиц
 python src/make_submissions.py                         # кандидаты в submissions/
+python src/make_rate_probe.py                          # leaderboard probe разных k
 python src/exp_features.py --variant base --model lgb --seeds 42,2026,777 --folds 4
 python src/compare_cv.py artifacts/baseline artifacts
 ```
@@ -200,7 +210,7 @@ python src/compare_cv.py artifacts/baseline artifacts
 
 | # | файл | бленд | k | обоснование |
 |---|---|---|---|---|
-| 1 | `submissions/submission_equal4_m180_fp.csv` | равные веса, 4 компоненты + reporter fingerprint TE | 1 782 | новый лучший вариант по CV |
+| 1 | `submissions/submission_equal4_m180.csv` | равные веса, 4 компоненты, legacy ranking | 1 782 | лучший подтверждённый leaderboard F1 `0.489` |
 | 2 | `submissions/submission_equal4_m160.csv` | равные веса, 4 компоненты | 1 584 | нижняя граница плато — страховка, если тест «легче» CV |
 | 3 | `submissions/submission_champblend_m180.csv` | `0.70/0.20/0.10` | 1 782 | отделяет вклад бленда от вклада операционной точки |
 | 4 | `submissions/submission_equal4_m200.csv` | равные веса, 4 компоненты | 1 980 | верхняя граница плато |
@@ -211,8 +221,9 @@ python src/compare_cv.py artifacts/baseline artifacts
 что подтверждает эквивалентность кода.
 
 `submissions/submission_equal4_m180.csv` остаётся ранее загруженным вариантом с public
-F1 `0.489`; новый кандидат — `submission.csv` и его копия
-`submissions/submission_equal4_m180_fp.csv`.
+F1 `0.489`; `submission.csv` воспроизводит этот файл. Fingerprint-кандидат
+`submissions/submission_equal4_m180_fp.csv` дал `0.4856` при том же `k` и отключён
+по умолчанию.
 
 ## 8. Структура репозитория
 
@@ -226,7 +237,7 @@ src/rate_curve.py            F1 как функция доли предсказ�
 src/make_submissions.py      сборка кандидатов из кэша вероятностей
 src/verify_reproducibility.py сверка нового пайплайна с кэшем вероятностей
 src/exp_features.py          абляции признаков и моделей
-src/features_v2.py           reporter fingerprint и history features
+src/features_v2.py           reporter fingerprint и history features для экспериментов
 src/eval_utils.py            общие метрики экспериментов
 src/compare_cv.py             сравнение baseline и нового CV
 artifacts/                   вероятности по фолдам, логи, таблицы анализа
@@ -235,6 +246,8 @@ models/                      сохранённые финальные моде�
 legacy/                      исследовательские скрипты предыдущих этапов
 docs/HYPOTHESES_ROUND2.md    гипотезы этого раунда (R1–R10) и их вердикты
 docs/HYPOTHESES_ROUND3.md    reporter fingerprint и абляции раунда 3
+docs/HYPOTHESES_ROUND4.md    model-side проверки и operating point
+docs/LEADERBOARD_PROBE.md    прямое измерение ranking и k на leaderboard
 docs/                        каталог экспериментов и отклонённых гипотез прошлых раундов
 DATA_DESCRIPTION.md          описание колонок
 ```
