@@ -42,3 +42,49 @@ python src/make_selection_batch.py
 Скрипт проверяет количество строк, число позитивов, порядок `claim_id`, бинарность
 меток и печатает SHA256 каждого результата. Исходный `submission.csv` скрипт не
 изменяет.
+
+## Измерения публичного leaderboard
+
+Эти значения получены на публичной половине теста и считаются
+авторитетными для данного раунда. Здесь `T=3723`, `P=495`, а
+`F1 = 2*TP/(k_scored+495)`. Результаты относятся к уже загруженным файлам.
+
+| Файл | k | Exact F1 | k_scored | Public TP |
+|---|---:|---:|---:|---:|
+| `cand_rank_all3` | 1782 | 0.49246231155778897 | 898 | 343 |
+| `cand_seeds2026_777` | 1782 | 0.4921090387374462 | 899 | 343 |
+| `cand_rank_legacy_fp` | 1782 | 0.4878048780487805 | 899 | 340 |
+| `submission_equal4_m180` | 1782 | ~0.489 | ~897 | ~340 |
+| `cand_seed42` | 1782 | 0.4860215053763441 | 900 | 339 |
+| `cand_wo_cat_all` | 1782 | 0.4794816414686825 | 894 | 333 |
+| `cand_wo_cat_recent` | 1782 | 0.4789135096497498 | 904 | 335 |
+| `cand_seed42_m190` | 1881 | 0.48261474269819193 | 943 | 347 |
+| `cand_rank_legacy_fp_m190` | 1881 | 0.48476454293628807 | 949 | 350 |
+
+На измеренных загрузках лидирует направление rank-average: `cand_rank_all3`
+получил 343 public TP. Увеличение k до 1881 не стало улучшением:
+маржинальная точность расширения остаётся ниже break-even. Вывод ограничен
+публичной половиной теста и не является оценкой всего тестового набора.
+
+## Batch 2: consensus-кандидаты
+
+Все пять новых файлов используют `k=1782`. Пересечения указаны отдельно с
+champion `submission_equal4_m180.csv` и с уже лучшим `cand_rank_all3.csv`.
+Все новые файлы прошли проверки размера, схемы, порядка строк и бинарности.
+
+| Файл | Рецепт | Champion overlap | `cand_rank_all3` overlap | SHA256 |
+|---|---|---:|---:|---|
+| `cand_rank_top5.csv` | rank-average: legacy, fingerprint, gmax, seed 42, seeds 2026+777 | 1758 | 1772 | `24843b8873e16f6078eeda8b9288caf8580af45a2ba135941292e252ba0bdd58` |
+| `cand_vote_top4.csv` | top-k vote legacy/fingerprint/gmax/seeds 2026+777, tie-break rank-average | 1768 | 1761 | `b5390e6908fb957059cfab9533d29a7d9b4b62d21bfafadeb2f785695a8436ce` |
+| `cand_gmax_hi.csv` | rank-average legacy + fingerprint + gmax, `wc=0.25`, `wo=0.15` | 1748 | 1779 | `63c858235af0d83aee726b8573d97f7e942818bc84a3a4061b3b340c5f5e2cc3` |
+| `cand_gmax_lo.csv` | rank-average legacy + fingerprint + gmax, `wc=0.08`, `wo=0.05` | 1749 | 1778 | `117345c646c880099289284dfb94720127de9d020f11ff0b253a24db39218973` |
+| `cand_rank_wide.csv` | rank-average пяти base scores плюс legacy equal5 с `lgb_strong` | 1762 | 1767 | `e17411b3059528556761b5ab7b3009cff452ab7fc09a8aa0b323082d05cb83ea` |
+
+Ни один из пяти новых файлов не совпадает побайтно с ранее загруженным
+кандидатом.
+
+Batch 2 воспроизводится командой:
+
+```bash
+python src/make_batch2.py
+```

@@ -40,6 +40,14 @@ OBSERVED = [
     ("probe_seg_c11", 808, 0.3581081081081081),
     ("probe_shift_to23", 1782, 0.47844827586206895),
     ("probe_shift_to11", 1782, 0.4716031631919482),
+    ("cand_seed42", 1782, 0.4860215053763441),
+    ("cand_wo_cat_recent", 1782, 0.4789135096497498),
+    ("cand_rank_legacy_fp", 1782, 0.4878048780487805),
+    ("cand_wo_cat_all", 1782, 0.4794816414686825),
+    ("cand_seeds2026_777", 1782, 0.4921090387374462),
+    ("cand_rank_all3", 1782, 0.49246231155778897),
+    ("cand_seed42_m190", 1881, 0.48261474269819193),
+    ("cand_rank_legacy_fp_m190", 1881, 0.48476454293628807),
 ]
 # Scores reported rounded to 3-4 digits; they cannot pin an exact TP, only bracket it.
 ROUNDED = [("m170", 1683, 0.48404), ("m180 (champion)", 1782, 0.489), ("m180_gmax", 1782, 0.488)]

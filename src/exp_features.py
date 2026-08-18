@@ -290,7 +290,7 @@ def _equal_component_score(data, components=BLEND_COMPONENTS, seeds=BLEND_SEEDS)
     )
 
 
-def _gmax_score(score, raw_block):
+def _gmax_score(score, raw_block, wc=BLEND_GMAX_WC, wo=BLEND_GMAX_WO):
     groups = pd.DataFrame({
         "score": score,
         "content": raw_block["id_content"].astype(str).to_numpy(),
@@ -299,9 +299,9 @@ def _gmax_score(score, raw_block):
     content_max = groups.groupby("content")["score"].transform("max").to_numpy()
     owner_max = groups.groupby("owner")["score"].transform("max").to_numpy()
     return (
-        (1.0 - BLEND_GMAX_WC - BLEND_GMAX_WO) * score
-        + BLEND_GMAX_WC * content_max
-        + BLEND_GMAX_WO * owner_max
+        (1.0 - wc - wo) * score
+        + wc * content_max
+        + wo * owner_max
     )
 
 
