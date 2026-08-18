@@ -60,7 +60,16 @@ VARIANTS = {
     # can be used at all, given that train is 99.4% country 23 while 40% of test is 11.
     "fpte_ip": {"keys": ["fp"], "count": True, "ip_cat": True},
     "fpte_ipte": {"keys": ["fp", "ip"], "count": True},
+    # Chronological label propagation over the repeated content / owner ids. The base
+    # pipeline already has a smoothed K-fold target encoding of these ids; these variants
+    # measure the *additional* value of hard, strictly-backward label counters (prior
+    # positives, prior negatives, indicators), which K-fold TE smooths away.
+    "lbl": {"lbl_keys": ["id_content", "id_content_owner"]},
+    "lbl_content": {"lbl_keys": ["id_content"]},
+    "lbl_owner": {"lbl_keys": ["id_content_owner"]},
+    "lbl_ind": {"lbl_keys": ["id_content", "id_content_owner"], "lbl_ind_only": True},
 }
+LBL_ALPHA = 5.0
 HIST_SUBSET = ["fp_prior_claims", "fp_gap_prev_hours", "fp_owner_prior_claims",
                "content_prior_claims", "owner_prior_claims"]
 
@@ -83,6 +92,39 @@ def _fp_keys(raw: pd.DataFrame, extra: list[str], names: list[str]) -> dict[str,
     return out
 
 
+def label_propagation(raw_tr, raw_va, key_col, alpha=LBL_ALPHA, ind_only=False):
+    """Strictly-backward label counters over `key_col`.
+
+    Training rows only see labels of *earlier* training rows with the same key (rows are
+    already ordered chronologically); validation rows see the whole training prefix.
+    """
+    y = raw_tr["is_valid"].to_numpy().astype(float)
+    keys_tr = raw_tr[key_col].astype(str)
+    grouped = pd.DataFrame({"key": keys_tr.to_numpy(), "y": y}).groupby("key", sort=False)
+    prior_cnt = grouped.cumcount().to_numpy().astype(float)
+    prior_pos = grouped["y"].cumsum().to_numpy() - y
+    gm = float(y.mean())
+    totals = grouped["y"].agg(["sum", "count"])
+    keys_va = raw_va[key_col].astype(str)
+    cnt_va = keys_va.map(totals["count"]).fillna(0).to_numpy().astype(float)
+    pos_va = keys_va.map(totals["sum"]).fillna(0).to_numpy().astype(float)
+    prefix = key_col.replace("id_content_owner", "ownlbl").replace("id_content", "cntlbl")
+
+    def block(cnt, pos):
+        neg = cnt - pos
+        cols = {
+            f"{prefix}_had_pos": (pos > 0).astype(float),
+            f"{prefix}_had_neg": (neg > 0).astype(float),
+        }
+        if not ind_only:
+            cols[f"{prefix}_prior_pos"] = pos
+            cols[f"{prefix}_prior_neg"] = neg
+            cols[f"{prefix}_prior_rate"] = (pos + alpha * gm) / (cnt + alpha)
+        return pd.DataFrame(cols)
+
+    return block(prior_cnt, prior_pos), block(cnt_va, pos_va)
+
+
 def add_variant_features(frame_tr, frame_va, raw_tr, raw_va, hist, variant):
     """Attach the feature block under test to already engineered frames."""
     cfg = VARIANTS[variant]
@@ -96,6 +138,13 @@ def add_variant_features(frame_tr, frame_va, raw_tr, raw_va, hist, variant):
         frame_tr["ip_country_id"] = raw_tr["ip_country_id"].to_numpy()
         frame_va["ip_country_id"] = raw_va["ip_country_id"].to_numpy()
         extra_numeric.append("ip_country_id")
+    for key_col in cfg.get("lbl_keys", []):
+        blk_tr, blk_va = label_propagation(raw_tr, raw_va, key_col,
+                                           ind_only=cfg.get("lbl_ind_only", False))
+        for col in blk_tr.columns:
+            frame_tr[col] = blk_tr[col].to_numpy()
+            frame_va[col] = blk_va[col].to_numpy()
+            extra_numeric.append(col)
     keys = cfg.get("keys", [])
     if keys:
         y_tr = raw_tr["is_valid"].to_numpy()
