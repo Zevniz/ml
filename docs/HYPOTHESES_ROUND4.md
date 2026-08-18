@@ -109,8 +109,9 @@ CV rate curve на reporter-fingerprint scores:
 отношение marginal precision в диапазоне `[1.8, 2.0]` к средней precision при
 `m=1.8` равно `0.536 / 0.749 / 0.687 / 0.419` для folds 4/3/2/1, среднее
 `0.60`. Leaderboard point с F1 `0.489` при `k=1782` означает `TP=678` и average
-precision `0.380`; для расширения нужен ratio выше `0.643`. Поэтому направление
-остаётся borderline и офлайн не разрешается.
+precision `0.380`; для расширения нужен ratio выше `0.643`. На этапе CV направление
+оставалось borderline и офлайн не разрешалось; последующая leaderboard-проба закрыла
+его напрямую.
 
 ### Calibration-based estimator
 
@@ -126,8 +127,8 @@ precision `0.380`; для расширения нужен ratio выше `0.643`
 
 ## Рекомендация
 
-Раунд 4 не нашёл дальнейшего измеримого model-side gain. Рекомендован leaderboard
-probe с одинаковым ranking и четырьмя значениями `k`:
+Раунд 4 не нашёл дальнейшего измеримого model-side gain. Выполненный leaderboard
+probe с одинаковым ranking для каждого семейства закрыл operating point:
 
 | Файл | k | m |
 |---|---:|---:|
@@ -136,12 +137,16 @@ probe с одинаковым ranking и четырьмя значениями `
 | `submissions/submission_equal4_m180_fp.csv` | 1782 | 1.8 |
 | `submissions/submission_equal4_m200_fp.csv` | 1980 | 2.0 |
 
-Все четыре файла используют один ranking и отличаются только `k`. Reported F1 при
-известном `k` позволяет точно восстановить `TP(k)`, поэтому две загрузки определят
+Файлы probe используют один ranking внутри каждого семейства и отличаются только `k`. Reported F1 при
+известном `k` позволяет точно восстановить `TP(k)`, поэтому загрузки позволили определить
 slope. После leaderboard-пробы стало известно, что fingerprint ranking проигрывает
 legacy ranking: при `k=1782` fingerprint даёт `TP=673`, F1 `0.4856`, против
 `TP=678`, F1 `0.4890` у legacy. Поэтому `solution.py` сохраняет `m=1.8`, но по
-умолчанию отключает fingerprint через `USE_REPORTER_FP = False`.
+умолчанию отключает fingerprint через `USE_REPORTER_FP = False`. Для legacy ranking
+точка `k=1683` дала F1 `0.48404` (`TP=647`), поэтому переход `1683 → 1782`
+имеет marginal precision `0.313`, выше break-even `0.2445`; выше `1782` marginal
+precision `0.192`, ниже break-even. Открытых probe больше нет: `k=1782` —
+подтверждённый optimum, а лучший результат — F1 `0.489` с `submission.csv`.
 
 ## Leaderboard evidence
 
