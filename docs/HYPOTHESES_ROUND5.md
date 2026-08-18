@@ -68,3 +68,11 @@ effect from 34 swaps: ±0.0245.
 Caveat: the reporter fingerprint also gained ≈ +0.003 on this CV and lost on the
 leaderboard, so this must be confirmed online before it is shipped. The shipped
 `submission.csv` remains the k=1782 champion until then.
+
+### Leaderboard result — rejected
+
+`submission_equal4_m180_gmax.csv` scored **0.488** online vs the champion's 0.489 at the
+same k=1782 (≈ 676 vs 678 true positives): the offline +0.0026 does not transfer, exactly
+like the reporter fingerprint before it. The 34 swapped rows net-lose about 2 true
+positives. Group-max propagation is rejected; the shipped `submission.csv` stays the
+k=1782 champion at 0.489.

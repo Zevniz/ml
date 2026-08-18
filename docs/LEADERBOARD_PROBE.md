@@ -37,6 +37,11 @@ noise), поэтому operating point был измерен на лидербо
 | legacy | `submission_equal4_m170.csv` | 1683 | 1.70 | 0.484040 | 647 | 0.3844 | 0.2420 | 0.313* |
 | legacy | `submission_equal4_m190.csv` | 1881 | 1.90 | 0.485813 | 697 | 0.3708 | 0.2429 | 0.192 |
 | legacy | `submission_equal4_m195.csv` | 1930 | 1.95 | 0.480546 | 702 | 0.3635 | 0.2403 | 0.102 |
+| gmax | `submission_equal4_m180_gmax.csv` | 1782 | 1.80 | 0.488 | ≈676 | 0.3794 | 0.2440 | — |
+
+Строка `gmax` — раунд 5 (group-max propagation по `id_content`/`id_content_owner`,
+см. `docs/HYPOTHESES_ROUND5.md`): при том же `k=1782` она теряет ≈2 верных позитива
+относительно чемпиона, гипотеза отклонена.
 
 `marginal precision` считается как `(TP(k) - TP(k_prev)) / (k - k_prev)`.
 Расширять `k` выгодно ровно пока marginal precision выше `F1/2`.
