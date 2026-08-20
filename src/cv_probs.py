@@ -196,9 +196,14 @@ def main() -> None:
     parser.add_argument("--folds", type=int, default=4)
     parser.add_argument("--seeds", type=str, default="42,2026,777")
     parser.add_argument("--final", action="store_true", help="fit on full train, score test.csv")
+    parser.add_argument("--out-dir", type=str, default=None,
+                        help="directory for probs_*.npz; defaults to artifacts/. Use a separate "
+                             "directory for exploratory seed counts so the shipped cache, which "
+                             "verify_reproducibility.py compares against, is left untouched.")
     args = parser.parse_args()
     seeds = [int(s) for s in args.seeds.split(",")]
-    ARTIFACTS.mkdir(exist_ok=True)
+    out_dir = Path(args.out_dir) if args.out_dir else ARTIFACTS
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     train = pd.read_csv(ROOT / "train.csv").sort_values("first_event_time").reset_index(drop=True)
     test = pd.read_csv(ROOT / "test.csv")
@@ -209,11 +214,11 @@ def main() -> None:
         print("FINAL: full train -> test.csv", flush=True)
         probabilities = component_probabilities(train, test, mappings, seeds, log)
         np.savez_compressed(
-            ARTIFACTS / "probs_test.npz",
+            out_dir / "probs_test.npz",
             claim_id=test["claim_id"].to_numpy(),
             **probabilities,
         )
-        (ARTIFACTS / "probs_test_log.json").write_text(json.dumps(log, indent=2), encoding="utf-8")
+        (out_dir / "probs_test_log.json").write_text(json.dumps(log, indent=2), encoding="utf-8")
         print(json.dumps(log, indent=2))
         return
 
@@ -241,12 +246,12 @@ def main() -> None:
               flush=True)
         probabilities = component_probabilities(raw_tr, raw_va, mappings, seeds, log)
         np.savez_compressed(
-            ARTIFACTS / f"probs_fold{fold}.npz",
+            out_dir / f"probs_fold{fold}.npz",
             y=raw_va["is_valid"].to_numpy(),
             claim_id=raw_va["claim_id"].to_numpy(),
             **probabilities,
         )
-        (ARTIFACTS / f"probs_fold{fold}_log.json").write_text(
+        (out_dir / f"probs_fold{fold}_log.json").write_text(
             json.dumps(log, indent=2), encoding="utf-8")
         print(json.dumps(log, indent=2), flush=True)
 
