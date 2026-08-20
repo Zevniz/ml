@@ -210,6 +210,8 @@ python src/make_submissions.py                         # кандидаты в s
 python src/make_rate_probe.py                          # leaderboard probe разных k
 python src/exp_features.py --variant base --model lgb --seeds 42,2026,777 --folds 4
 python src/compare_cv.py artifacts/baseline artifacts
+python src/cv_probs.py --folds 4 --seeds 42,2026,777,1337,7,13,99,123,2024,31337,555,8888 --out-dir /tmp/vk_seed12
+python src/compare_seed_counts.py --dir /tmp/vk_seed12 --seeds 42,2026,777,1337,7,13,99,123,2024,31337,555,8888 --counts 1,3,6,12
 ```
 
 ## 7. Кандидаты и порядок загрузки (5 попыток)
@@ -246,6 +248,7 @@ src/exp_features.py          абляции признаков и моделей
 src/features_v2.py           reporter fingerprint и history features для экспериментов
 src/eval_utils.py            общие метрики экспериментов
 src/compare_cv.py             сравнение baseline и нового CV
+src/compare_seed_counts.py   влияние числа сидов на ранжир и на F1 в рабочей точке
 artifacts/                   вероятности по фолдам, логи, таблицы анализа
 submissions/                 кандидаты на загрузку
 models/                      сохранённые финальные модели
@@ -254,6 +257,7 @@ docs/HYPOTHESES_ROUND2.md    гипотезы этого раунда (R1–R10)
 docs/HYPOTHESES_ROUND3.md    reporter fingerprint и абляции раунда 3
 docs/HYPOTHESES_ROUND4.md    model-side проверки и operating point
 docs/LEADERBOARD_PROBE.md    прямое измерение ranking и k на leaderboard
+docs/HYPOTHESES_ROUND6.md    число сидов в усреднении: 12 против 3, отклонено
 docs/KNOWN_LIMITATIONS.md    известные дефекты кода, их измеренный эффект и цена правки
 docs/                        каталог экспериментов и отклонённых гипотез прошлых раундов
 DATA_DESCRIPTION.md          описание колонок
