@@ -194,6 +194,11 @@ python src/verify_reproducibility.py   # сверка с сохранённым�
 случайности зафиксированы (`random_seed`/`random_state` = 42, 2026, 777; никаких
 операций, зависящих от порядка потоков, кроме детерминированного бустинга).
 
+Известные дефекты кода, их измеренный эффект и цена исправления перечислены в
+[docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md). Ни один из них не влияет на
+воспроизводимость: `submission.csv` байт-в-байт совпадает с отгруженным
+`submissions/submission_equal4_m180.csv` (sha256 `bd1fb0bb…`, 1 782 позитива).
+
 Исследовательские прогоны:
 
 ```bash
@@ -249,6 +254,7 @@ docs/HYPOTHESES_ROUND2.md    гипотезы этого раунда (R1–R10)
 docs/HYPOTHESES_ROUND3.md    reporter fingerprint и абляции раунда 3
 docs/HYPOTHESES_ROUND4.md    model-side проверки и operating point
 docs/LEADERBOARD_PROBE.md    прямое измерение ranking и k на leaderboard
+docs/KNOWN_LIMITATIONS.md    известные дефекты кода, их измеренный эффект и цена правки
 docs/                        каталог экспериментов и отклонённых гипотез прошлых раундов
 DATA_DESCRIPTION.md          описание колонок
 ```
