@@ -95,4 +95,8 @@ def _prune_models_if_needed(model_dir: Path) -> None:
 - `train.csv` и `test.csv` присутствуют в git, репозиторий клонируется без авторизации,
   то есть путь `git clone` в `solution.ipynb` рабочий;
 - сохранённые модели согласованы с отгруженным кодом: ни в одной нет признаков
-  reporter fingerprint (`USE_REPORTER_FP = False`).
+  reporter fingerprint (`USE_REPORTER_FP = False`);
+- ноутбук прогнан в Google Colab 20.08.2026 и воспроизвёл тот же sha256 и те же числа
+  итераций early stopping; при этом найден и исправлен дефект третьей ячейки, из-за
+  которого Run all падал на `ImportError` — см.
+  [COLAB_VERIFICATION.md](COLAB_VERIFICATION.md).
